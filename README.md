@@ -1,15 +1,14 @@
 # voice-ime
 
-极简语音输入法：录音 → 端到端 ASR → 词表纠正 → 复制到剪贴板。
+极简语音输入法：按住热键录音 → 端到端 ASR 识别 → 词表热词注入 → 剪贴板输出。
 
-支持三家国内 LLM-based 端到端 ASR 提供商一键切换：**智谱（默认）**、字节、阿里。
+默认使用 **智谱 GLM-ASR-2512**，一键切换字节 Seed-ASR / 阿里 Qwen-Omni。
 
 ## 特性
 
-- 🎙️ **按住即录**：默认按住 `F9` 录音，松开后自动识别
-- ☁️ **多 ASR 后端**：智谱 GLM-ASR / 字节 Seed-ASR / 阿里 Qwen-Omni 一键切换
-- 📖 **专业词表**：字符串前向最大匹配，快速纠正术语
-- 🔄 **词表自学习**：按 `F10` 进入反馈模式，把纠正经验沉淀到 `glossary.json`
+- 🎙️ **按住即录**：默认按住 `F9` 录音，松开后自动识别并输出到剪贴板
+- ☁️ **多 ASR 后端**：智谱（默认）/ 字节 / 阿里一键切换，改 `.env` 即可
+- 📖 **热词自学习**：按 `F10` 把识别错误的术语加入词表，下次 ASR 自动注入 hotwords
 - 📋 **剪贴板输出**：识别完成后直接复制到剪贴板，手动粘贴即可
 
 ## 快速开始
@@ -33,10 +32,10 @@ python main.py
 # === 选择 ASR 提供商 ===
 ASR_PROVIDER=zhipu          # 可选: zhipu | volcengine | ali
 
-# === 智谱 GLM-ASR（默认推荐）===
+# === 智谱 GLM-ASR（默认推荐，延迟最低）===
 ZHIPU_API_KEY=your-zhipu-key
 
-# === 字节 Seed-ASR（性价比最高）===
+# === 字节 Seed-ASR（性价比最高，需 TOS）===
 # VOLCENGINE_API_KEY=your-volc-key
 # TOS_ACCESS_KEY=your-tos-ak
 # TOS_SECRET_KEY=your-tos-sk
@@ -45,20 +44,22 @@ ZHIPU_API_KEY=your-zhipu-key
 # === 阿里 Qwen-Omni（多模态扩展）===
 # DASHSCOPE_API_KEY=sk-xxx
 # ALI_ASR_MODEL=qwen-omni-turbo
+
+# === 热键 ===
+HOTKEY_RECORD=f9
+HOTKEY_FEEDBACK=f10
 ```
 
 ## 用法
 
 | 操作 | 说明 |
 |------|------|
-| 按住 `F9` | 开始录音，松开后自动进行识别、纠正并输出 |
-| 按 `F10` | 对最近一次结果进行反馈，更新专业词表 |
+| 按住 `F9` | 开始录音，松开后自动识别并输出到剪贴板 |
+| 按 `F10` | 对最近一次结果进行反馈，把术语加入热词表 |
 
 ## ASR 提供商对比
 
-我们使用同一批 D&D 跑团中文语音（MiniMax TTS 合成，6 段，总长 24 秒）对三家端到端 ASR 进行了横向评测。
-
-### 识别质量
+同一批 D&D 跑团中文语音（MiniMax TTS 合成，6 段）横向评测：
 
 | 文件 | Ground Truth | 字节 Seed-ASR | 智谱 GLM-ASR | 阿里 Qwen-Omni |
 |---|---|---|---|---|
@@ -69,67 +70,62 @@ ZHIPU_API_KEY=your-zhipu-key
 | 005 | `那我也要在旁边协助攻击，我使用借机攻击！` | `那我也要在旁边协助攻击，我使用借机攻击。` | `那我也要在旁边协助攻击，我使用借机攻击。` | `那我也要在旁边协助攻击我使用借机攻击` |
 | 006 | `很好，战斗开始了。` | `很好，战斗开始了。` | `很好，战斗开始了。` | `很好战斗开始了` |
 
-**语义准确率**：三家均为 **100%**，D&D 术语（火球术、专注检定、体质豁免、借机攻击）零错误。
-
 ### 功能差异
 
 | 维度 | 字节 Seed-ASR 2.0 | 智谱 GLM-ASR-2512 | 阿里 Qwen-Omni-Turbo |
 |---|---|---|---|
-| **智能标点** | ✅ 支持 | ✅ 支持 | ❌ 无标点 |
+| **智能标点** | ✅ | ✅ | ❌ |
 | **ITN 数字转换** | ✅ 三十尺→30尺 | ✅ 三十尺→30尺 | ❌ 保持原文 |
-| **Prompt 注入** | ✅ `corpus.context` | ✅ `prompt` 参数 | ⚠️ system_prompt 易幻觉 |
-| **热词支持** | ✅ `hotwords` 嵌套在 context 内 | ✅ `hotwords` 数组参数 | ❌ 无原生热词接口 |
+| **Prompt 注入** | ✅ `corpus.context` | ✅ `prompt` 参数 | ⚠️ 易幻觉 |
+| **热词支持** | ✅ 嵌套在 context 内 | ✅ `hotwords` 数组 | ❌ |
 | **延迟（2.7s 音频）** | ~1.3s | **~0.7s** | ~1.0s |
 | **价格** | **¥0.013/分钟** | ¥0.06/分钟 | ¥0.025/千 token 音频 |
-| **接口复杂度** | 中（需 TOS + 轮询） | **低**（multipart 直传） | 中（SSE 流式解析） |
+| **接口复杂度** | 中（TOS + 轮询） | **低**（multipart 直传）| 中（SSE 流式）|
 
 ### 选型建议
 
 | 场景 | 推荐 |
 |---|---|
-| **追求低延迟** | 智谱（0.7s，体验最流畅） |
-| **追求性价比** | 字节（¥0.013/分钟，价格最低） |
-| **追求接入简单** | 智谱（OpenAI 兼容，一行代码） |
-| **需要多模态扩展**（后续加视频/图片理解） | 阿里 Qwen-Omni |
-| **需要强 Prompt/热词控制** | 字节或智谱 |
-| **voice-ime 默认** | **智谱**（团队内部采用） |
+| **低延迟 + 接入简单** | 智谱（0.7s，OpenAI 兼容） |
+| **性价比优先** | 字节（¥0.013/分钟） |
+| **多模态扩展**（后续加视频/图片） | 阿里 Qwen-Omni |
+| **voice-ime 默认** | **智谱** |
 
-### 接入注意事项
+## 词表机制（热词收集器）
 
-- **字节 Seed-ASR**：录音文件识别需要音频有公网 URL。Demo 中通过火山引擎 TOS 上传本地文件获取 URL。`hotwords` 必须嵌套在 `corpus.context` JSON 字符串内部（`{"hotwords":[{"word":"xxx"}]}`），不能作为 `corpus` 的独立字段。
-- **智谱 GLM-ASR**：OpenAI 兼容接口，multipart 直接上传本地文件即可。`prompt` 用于连续识别上下文衔接，`hotwords` 为数组格式。
-- **阿里 Qwen-Omni**：是多模态**对话模型**而非纯 ASR 模型，`system_prompt` 容易导致幻觉（编造内容）。纯 ASR 场景建议留空 `system_prompt`，仅用 `user_prompt` 明确指示"忠实转写"。音频输入必须用 `input_audio` 类型，且必须开启 `stream=True`。
-
-## 词表机制
-
-词表文件 `glossary.json` 格式：
+`glossary.json` 格式保持不变：
 
 ```json
 {
-  "马克拉夫": "Markov",
-  "派森": "Python",
-  "杰森": "JSON"
+  "火球数": "火球术",
+  "体质勉疫": "体质豁免",
+  "借机工击": "借机攻击"
 }
 ```
 
-- **自动加载**：启动时自动加载
-- **前向最大匹配**：ASR 结果出来后先做纯字符串替换
-- **反馈更新**：如果某次识别错误，按 `F10` 把正确映射写回词表，下次识别优先命中
+- **F10 反馈**：识别错误时按 `F10`，输入"错误写法 → 正确热词"，自动保存
+- **自动注入**：下次 ASR 调用时，所有 `values` 去重后作为 `hotwords` 注入模型
+- **追溯记录**：`key` 保留历史错误写法，方便追溯哪些词容易识别错
+
+> 旧版 voice-ime 在 ASR 输出后做字符串前向匹配替换，新版改为 ASR 调用时注入 hotwords，模型内部优先识别，链路更干净。
 
 ## 项目结构
 
 ```
 voice-ime/
-├── main.py                # 主循环（热键监听 + 流水线调度）
-├── config.py              # 配置管理（.env + 默认值）
-├── asr_provider.py        # 统一 ASR 接口封装（智谱/字节/阿里）
-├── recorder.py            # 录音（pyaudio + keyboard）
-├── glossary.py            # 专业词表：加载、保存、字符串纠正
-├── output.py              # 输出到剪贴板
-├── upload_to_tos.py       # 火山引擎 TOS 文件上传（字节 ASR 需要）
+├── main.py              # 主循环（热键监听 + 流水线调度）
+├── config.py            # 配置管理（ASR_PROVIDER + Key + 热键 + 音频）
+├── asr_provider.py      # 统一 ASR 接口封装（智谱/字节/阿里）
+├── recorder.py          # 录音（sounddevice + keyboard）
+├── glossary.py          # 热词收集器（F10 反馈 → hotwords 注入 ASR）
+├── output.py            # 剪贴板输出
+├── upload_to_tos.py     # 火山引擎 TOS 上传（字节 ASR 需要）
 ├── requirements.txt
 ├── .env.example
-└── glossary.json          # 用户词表（运行时自动生成）
+├── .gitignore
+├── README.md
+├── AGENTS.md
+└── glossary.json        # 用户热词（运行时自动生成，不提交 git）
 ```
 
 ## 参考来源
