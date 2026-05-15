@@ -1,25 +1,28 @@
-"""Professional glossary for ASR error correction.
+"""Professional glossary: collect hotwords for ASR enhancement.
 
-词表机制:
-    - 持久化存储在 JSON 文件里，格式 {"错误读音": "正确术语", ...}
-    - 在 ASR 结果出来后先做一轮前向最大匹配替换（纯字符串层面）
-    - 替换后的文本再送给 LLM，Prompt 里也会注入词表供 LLM 参考
-    - 用户可以通过反馈热键把 "LLM 修正前 → 用户最终修改后" 的映射自动/半自动加入词表
+职责变更:
+    旧: ASR 结果出来后做字符串前向最大匹配替换（纯字符串层面）
+    新: 作为热词收集器，通过 F10 反馈沉淀术语，供 ASR 调用时注入 hotwords
+
+词表格式（保持不变）:
+    {"错误读音": "正确术语", ...}
+    - Key 是历史识别错误的写法（便于追溯）
+    - Value 是需要 ASR 加强识别的标准术语
+    - ASR 调用时提取所有 values 去重后作为 hotwords 注入
 """
 
 import json
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 from config import Config
 
 
 class Glossary:
-    """A simple in-memory glossary backed by a JSON file."""
+    """热词收集器：通过 F10 反馈沉淀术语，供 ASR 调用时注入 hotwords。"""
 
     def __init__(self, cfg: Config):
         self.path = cfg.glossary_path
-        self.max_len = cfg.glossary_max_match_len
         self._table: Dict[str, str] = {}
         self.load()
 
@@ -47,7 +50,7 @@ class Glossary:
     # ---------- CRUD ----------
 
     def add(self, wrong: str, correct: str) -> None:
-        """Add or update a correction pair."""
+        """Add or update a (wrong, correct) pair."""
         wrong = wrong.strip()
         correct = correct.strip()
         if wrong and correct:
@@ -68,59 +71,26 @@ class Glossary:
     def items(self) -> Dict[str, str]:
         return dict(self._table)
 
-    # ---------- correction ----------
+    # ---------- hotwords for ASR ----------
 
-    def correct(self, text: str) -> str:
-        """Apply forward-maximum matching correction on the text.
-
-        This is a pure string-level patch *before* LLM processing.
-        It's fast and deterministic.
-        """
+    def hotwords(self) -> list[str]:
+        """Extract all unique correct terms for ASR hotwords injection."""
         if not self._table:
-            return text
-
-        corrected = []
-        i = 0
-        n = len(text)
-        keys = list(self._table.keys())
-        # Sort keys by length descending so longer matches are tried first
-        keys.sort(key=lambda k: len(k), reverse=True)
-
-        while i < n:
-            matched = False
-            max_try = min(self.max_len, n - i)
-            for key in keys:
-                if len(key) <= max_try and text[i : i + len(key)] == key:
-                    corrected.append(self._table[key])
-                    i += len(key)
-                    matched = True
-                    break
-            if not matched:
-                corrected.append(text[i])
-                i += 1
-
-        return "".join(corrected)
-
-    # ---------- diff-based learning ----------
-
-    def suggest_pairs(self, before: str, after: str) -> list[Tuple[str, str]]:
-        """Heuristically extract changed substrings between before/after.
-
-        Returns a list of candidate (wrong, correct) tuples.
-        Current implementation is naive: if overall strings differ,
-        it returns the whole text as a candidate. User decides whether to add.
-        """
-        if before == after:
             return []
-        # Naive whole-text suggestion; can be replaced with LCS diff later
-        return [(before, after)]
+        # Deduplicate while preserving order
+        seen = set()
+        result = []
+        for v in self._table.values():
+            if v not in seen:
+                seen.add(v)
+                result.append(v)
+        return result
 
-
-def build_glossary_prompt(table: Dict[str, str]) -> str:
-    """Build a prompt snippet that injects glossary into LLM context."""
-    if not table:
-        return ""
-    lines = ["以下是一份专业术语对照表，请在润色和纠错时严格参考："]
-    for k, v in table.items():
-        lines.append(f"  - 语音中若出现「{k}」，应纠正为「{v}」")
-    return "\n".join(lines)
+    def hotwords_prompt(self) -> str:
+        """Build a readable summary of current hotwords for display."""
+        words = self.hotwords()
+        if not words:
+            return "当前无热词"
+        return f"当前热词 ({len(words)} 个): {', '.join(words[:10])}" + (
+            " ..." if len(words) > 10 else ""
+        )

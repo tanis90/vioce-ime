@@ -65,8 +65,12 @@ class VoiceIME:
             print("[Warn] 录音过短，已忽略")
             return
 
-        # 2. ASR
-        asr_result = await asyncio.to_thread(self.asr_provider.transcribe, audio_path)
+        # 2. ASR (注入热词)
+        asr_result = await asyncio.to_thread(
+            self.asr_provider.transcribe,
+            audio_path,
+            hotwords=self.glossary.hotwords(),
+        )
         raw_text = asr_result.get("text", "")
         if not raw_text:
             print("[Warn] 识别失败，无结果")
@@ -74,17 +78,12 @@ class VoiceIME:
         self._last_raw = raw_text
         print(f"[ASR] {asr_result.get('provider', '?')} | 延迟: {asr_result.get('latency', '-')}s | 结果: {raw_text}")
 
-        # 3. Glossary string-level correction
-        corrected = self.glossary.correct(raw_text)
-        if corrected != raw_text:
-            print(f"[词表替换] {raw_text} -> {corrected}")
-
-        # 4. Output
-        self._last_final = corrected
+        # 3. Output
+        self._last_final = raw_text
         total = time.time() - t0
-        print(f"\n[Done] 结果: {corrected}")
+        print(f"\n[Done] 结果: {raw_text}")
         print(f"[Done] 全流程耗时: {total:.2f}s\n")
-        self._send(corrected)
+        self._send(raw_text)
 
     async def _handle_feedback(self) -> None:
         """Interactive feedback to update glossary."""
@@ -92,10 +91,11 @@ class VoiceIME:
             print("[反馈] 尚无识别记录，请先录音识别一次")
             return
 
-        print("\n--- 反馈纠正 ---")
+        print("\n--- 热词反馈 ---")
         print(f"识别原文: {self._last_raw}")
-        print(f"纠正结果: {self._last_final}")
-        print("选项: [1] 把「上次输出」整体加入词表  [2] 手动输入正确文本并建立映射  [3] 查看当前词表  [Enter] 取消")
+        print(f"输出结果: {self._last_final}")
+        print(self.glossary.hotwords_prompt())
+        print("选项: [1] 把「输出结果」加入热词  [2] 手动输入错误写法→正确热词  [3] 查看词表映射  [Enter] 取消")
         try:
             choice = await asyncio.to_thread(input, "请选择: ")
         except EOFError:
@@ -107,7 +107,7 @@ class VoiceIME:
         elif choice == "2":
             try:
                 wrong = await asyncio.to_thread(input, "请输入语音识别错误的内容: ")
-                correct = await asyncio.to_thread(input, "请输入正确内容: ")
+                correct = await asyncio.to_thread(input, "请输入正确热词: ")
                 self.glossary.add(wrong.strip(), correct.strip())
             except EOFError:
                 pass
@@ -120,6 +120,7 @@ class VoiceIME:
                     print(f"  {k} -> {v}")
                 if len(items) > 20:
                     print(f"  ... 共 {len(items)} 条")
+                print(f"\n{self.glossary.hotwords_prompt()}")
         else:
             print("[反馈] 已取消")
         print("---")
