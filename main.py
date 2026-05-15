@@ -20,7 +20,6 @@ from config import Config
 from recorder import record_audio
 from asr_provider import ASRProviderFactory
 from glossary import Glossary
-from llm_postprocess import postprocess
 from output import send
 
 
@@ -80,15 +79,12 @@ class VoiceIME:
         if corrected != raw_text:
             print(f"[词表替换] {raw_text} -> {corrected}")
 
-        # 4. LLM post-processing
-        final_text = await asyncio.to_thread(postprocess, corrected, self.cfg, self.glossary)
-        self._last_final = final_text
-
-        # 5. Output
+        # 4. Output
+        self._last_final = corrected
         total = time.time() - t0
-        print(f"\n[Done] 最终结果: {final_text}")
+        print(f"\n[Done] 结果: {corrected}")
         print(f"[Done] 全流程耗时: {total:.2f}s\n")
-        self._send(final_text)
+        self._send(corrected)
 
     async def _handle_feedback(self) -> None:
         """Interactive feedback to update glossary."""
@@ -98,7 +94,7 @@ class VoiceIME:
 
         print("\n--- 反馈纠正 ---")
         print(f"识别原文: {self._last_raw}")
-        print(f"上次输出: {self._last_final}")
+        print(f"纠正结果: {self._last_final}")
         print("选项: [1] 把「上次输出」整体加入词表  [2] 手动输入正确文本并建立映射  [3] 查看当前词表  [Enter] 取消")
         try:
             choice = await asyncio.to_thread(input, "请选择: ")

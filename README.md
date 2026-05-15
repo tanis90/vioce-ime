@@ -1,6 +1,6 @@
 # voice-ime
 
-极简语音输入法：录音 → 端到端 ASR → 词表纠正 → LLM 润色 → 复制到剪贴板。
+极简语音输入法：录音 → 端到端 ASR → 词表纠正 → 复制到剪贴板。
 
 支持三家国内 LLM-based 端到端 ASR 提供商一键切换：**智谱（默认）**、字节、阿里。
 
@@ -8,10 +8,7 @@
 
 - 🎙️ **按住即录**：默认按住 `F9` 录音，松开后自动识别
 - ☁️ **多 ASR 后端**：智谱 GLM-ASR / 字节 Seed-ASR / 阿里 Qwen-Omni 一键切换
-- 📖 **专业词表**：两层纠正机制
-  1. **字符串前向最大匹配**：快速、确定性的术语替换
-  2. **LLM Prompt 注入**：让模型在润色时参考词表
-- 🤖 **LLM 后处理**：可配置任意 OpenAI 兼容接口，自动加标点、去冗余、纠术语
+- 📖 **专业词表**：字符串前向最大匹配，快速纠正术语
 - 🔄 **词表自学习**：按 `F10` 进入反馈模式，把纠正经验沉淀到 `glossary.json`
 - 📋 **剪贴板输出**：识别完成后直接复制到剪贴板，手动粘贴即可
 
@@ -54,7 +51,7 @@ ZHIPU_API_KEY=your-zhipu-key
 
 | 操作 | 说明 |
 |------|------|
-| 按住 `F9` | 开始录音，松开后自动进行识别、纠正、润色并输出 |
+| 按住 `F9` | 开始录音，松开后自动进行识别、纠正并输出 |
 | 按 `F10` | 对最近一次结果进行反馈，更新专业词表 |
 
 ## ASR 提供商对比
@@ -117,7 +114,6 @@ ZHIPU_API_KEY=your-zhipu-key
 
 - **自动加载**：启动时自动加载
 - **前向最大匹配**：ASR 结果出来后先做纯字符串替换
-- **Prompt 注入**：替换后的文本送给 LLM 时，词表也会写入 system/user prompt
 - **反馈更新**：如果某次识别错误，按 `F10` 把正确映射写回词表，下次识别优先命中
 
 ## 项目结构
@@ -128,14 +124,9 @@ voice-ime/
 ├── config.py              # 配置管理（.env + 默认值）
 ├── asr_provider.py        # 统一 ASR 接口封装（智谱/字节/阿里）
 ├── recorder.py            # 录音（pyaudio + keyboard）
-├── glossary.py            # 专业词表：加载、保存、字符串纠正、Prompt 生成
-├── llm_postprocess.py     # LLM 润色（OpenAI 兼容接口）
+├── glossary.py            # 专业词表：加载、保存、字符串纠正
 ├── output.py              # 输出到剪贴板
 ├── upload_to_tos.py       # 火山引擎 TOS 文件上传（字节 ASR 需要）
-├── demo_glm_asr.py        # 智谱 GLM-ASR Demo
-├── demo_seed_asr.py       # 字节 Seed-ASR Demo
-├── demo_qwen_omni_asr.py  # 阿里 Qwen-Omni Demo
-├── benchmark_latency.py   # 三家延迟对比测试
 ├── requirements.txt
 ├── .env.example
 └── glossary.json          # 用户词表（运行时自动生成）
