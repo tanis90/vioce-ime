@@ -1,0 +1,8 @@
+dashscope>=1.14.0
+sounddevice>=0.4.6
+numpy
+keyboard>=0.13.5
+pyperclip>=1.8.2
+openai>=1.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0

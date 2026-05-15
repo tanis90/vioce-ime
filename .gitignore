@@ -1,0 +1,37 @@
+# 环境变量（含密钥）
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 临时录音文件
+*.wav
+*.mp3
+*.m4a
+*.ogg
+
+# 临时测试结果
+test_result*.txt
+debug_result.txt
+funasr_test_result.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kimi CLI 配置
+.kimi/
+
+# 运行时生成的用户数据
+glossary.json
